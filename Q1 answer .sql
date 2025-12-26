@@ -1,3 +1,9 @@
+-- Purpose: Calculate match rate per country using Q1 rule
+-- Output: Country, total_records, matched_records_q1, match_rate_q1
+-- Notes:
+--   - MatchStatusID: 2=match, 3=nomatch, else missing
+--   - A record matches if any datasource has Name match AND (Address match OR DOB match)
+
 WITH field_flags AS (
   SELECT
     Country,
@@ -82,3 +88,4 @@ SELECT
 FROM joined
 GROUP BY Country
 ORDER BY Country;
+
