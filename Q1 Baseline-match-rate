@@ -5,6 +5,7 @@
 --   - A record matches if any datasource has Name match AND (Address match OR DOB match)
 
 WITH field_flags AS (
+-- Convert MatchStatusID into usablw flags for aggregation 
   SELECT
     Country,
     RecordID,
@@ -17,21 +18,29 @@ WITH field_flags AS (
 ),
 
 per_ds AS (
+-- one row per (Country, RecordID, Datasource) with term-level  match flags 
   SELECT
     Country,
     RecordID,
     Datasource,
+
+--NAME: FirstName AND LastName match 
     CASE 
       WHEN SUM(CASE WHEN Field = 'FirstName' AND is_match = 1 THEN 1 ELSE 0 END) > 0
        AND SUM(CASE WHEN Field = 'LastName'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
       THEN 1 ELSE 0
     END AS name_match,
+
+--DateofBirth: Dayofbirth AND monthofbirth AND YearofBirth match 
     CASE 
       WHEN SUM(CASE WHEN Field = 'DayOfBirth'   AND is_match = 1 THEN 1 ELSE 0 END) > 0
        AND SUM(CASE WHEN Field = 'MonthOfBirth' AND is_match = 1 THEN 1 ELSE 0 END) > 0
        AND SUM(CASE WHEN Field = 'YearOfBirth'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
       THEN 1 ELSE 0
     END AS dob_match,
+--Address: StreetName AND HouseNumber AND (postalcode OR city) match,
+-- and unitNumber is NOT a nomatch (MatchStatudID =3)
+
     CASE 
       WHEN SUM(CASE WHEN Field = 'StreetName'   AND is_match = 1 THEN 1 ELSE 0 END) > 0
        AND SUM(CASE WHEN Field = 'HouseNumber'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
@@ -50,6 +59,7 @@ per_ds AS (
 ),
 
 per_record AS (
+-- one row per (Country,RecordID). record matches if AMY datasources meets the rule. 
   SELECT
     Country,
     RecordID,
@@ -70,6 +80,7 @@ per_record AS (
 ),
 
 joined AS (
+--Keep all transactions in the denominator 
   SELECT
     r.Country,
     r.RecordID,
@@ -88,4 +99,5 @@ SELECT
 FROM joined
 GROUP BY Country
 ORDER BY Country;
+
 
