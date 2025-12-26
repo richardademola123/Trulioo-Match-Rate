@@ -23,6 +23,7 @@ per_ds AS (
     RecordID,
     Datasource,
 
+--Name(Q2): FirstInitial AND LastName match 
     
     CASE 
       WHEN SUM(CASE WHEN Field = 'FirstInitial' AND is_match = 1 THEN 1 ELSE 0 END) > 0
@@ -30,13 +31,15 @@ per_ds AS (
       THEN 1 ELSE 0
     END AS name_match,
 
+--Dateofbirth: dayofbirth AND monthofbirth AND yearofbirth match
+
     CASE 
       WHEN SUM(CASE WHEN Field = 'DayOfBirth'   AND is_match = 1 THEN 1 ELSE 0 END) > 0
        AND SUM(CASE WHEN Field = 'MonthOfBirth' AND is_match = 1 THEN 1 ELSE 0 END) > 0
        AND SUM(CASE WHEN Field = 'YearOfBirth'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
       THEN 1 ELSE 0
     END AS dob_match,
-
+--Adress(same as Q1)
     CASE 
       WHEN SUM(CASE WHEN Field = 'StreetName'   AND is_match = 1 THEN 1 ELSE 0 END) > 0
        AND SUM(CASE WHEN Field = 'HouseNumber'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
@@ -58,4 +61,5 @@ per_ds AS (
 SELECT *
 FROM per_ds
 LIMIT 20;
+
 
