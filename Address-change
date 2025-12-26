@@ -1,0 +1,136 @@
+-- Question 3
+-- Purpose: Recalculate match rate per country by modifying the Address definition
+-- Change from Q1:
+--   Removed the requirement that UnitNumber must not be a NoMatch
+-- Output:
+--   Country, total_records, match_rate_q3, delta_q3_vs_q1
+
+WITH field_flags AS (
+  SELECT
+    Country,
+    RecordID,
+    Datasource,
+    Field,
+    MatchStatusID,
+    IF(MatchStatusID = 2, 1, 0) AS is_match,
+    IF(MatchStatusID = 3, 1, 0) AS is_nomatch
+  FROM `vibrant-sound-459613-a3.trulioo.Field_table `
+),
+
+per_ds_q1 AS (
+  SELECT
+    Country,
+    RecordID,
+    Datasource,
+
+    -- Q1 Name: FirstName + LastName
+    IF(
+      SUM(IF(Field = 'FirstName', is_match, 0)) > 0
+      AND SUM(IF(Field = 'LastName',  is_match, 0)) > 0,
+      1, 0
+    ) AS name_match,
+
+    -- DOB (same)
+    IF(
+      SUM(IF(Field = 'DayOfBirth',   is_match, 0)) > 0
+      AND SUM(IF(Field = 'MonthOfBirth', is_match, 0)) > 0
+      AND SUM(IF(Field = 'YearOfBirth',  is_match, 0)) > 0,
+      1, 0
+    ) AS dob_match,
+
+    -- Q1 Address (includes UnitNumber not nomatch)
+    IF(
+      SUM(IF(Field = 'StreetName',  is_match, 0)) > 0
+      AND SUM(IF(Field = 'HouseNumber', is_match, 0)) > 0
+      AND (
+        SUM(IF(Field = 'PostalCode', is_match, 0)) > 0
+        OR SUM(IF(Field = 'City',    is_match, 0)) > 0
+      )
+      AND SUM(IF(Field = 'UnitNumber', is_nomatch, 0)) = 0,
+      1, 0
+    ) AS address_match
+  FROM field_flags
+  GROUP BY Country, RecordID, Datasource
+),
+
+per_ds_q3 AS (
+  SELECT
+    Country,
+    RecordID,
+    Datasource,
+
+    -- Name (same as Q1)
+    IF(
+      SUM(IF(Field = 'FirstName', is_match, 0)) > 0
+      AND SUM(IF(Field = 'LastName',  is_match, 0)) > 0,
+      1, 0
+    ) AS name_match,
+
+    -- DOB (same)
+    IF(
+      SUM(IF(Field = 'DayOfBirth',   is_match, 0)) > 0
+      AND SUM(IF(Field = 'MonthOfBirth', is_match, 0)) > 0
+      AND SUM(IF(Field = 'YearOfBirth',  is_match, 0)) > 0,
+      1, 0
+    ) AS dob_match,
+
+    -- Q3 Address: UnitNumber condition REMOVED
+    IF(
+      SUM(IF(Field = 'StreetName',  is_match, 0)) > 0
+      AND SUM(IF(Field = 'HouseNumber', is_match, 0)) > 0
+      AND (
+        SUM(IF(Field = 'PostalCode', is_match, 0)) > 0
+        OR SUM(IF(Field = 'City',    is_match, 0)) > 0
+      ),
+      1, 0
+    ) AS address_match
+  FROM field_flags
+  GROUP BY Country, RecordID, Datasource
+),
+
+per_record_q1 AS (
+  SELECT
+    Country,
+    RecordID,
+    IF(
+      SUM(IF(name_match = 1 AND (address_match = 1 OR dob_match = 1), 1, 0)) > 0,
+      1, 0
+    ) AS record_match_q1
+  FROM per_ds_q1
+  GROUP BY Country, RecordID
+),
+
+per_record_q3 AS (
+  SELECT
+    Country,
+    RecordID,
+    IF(
+      SUM(IF(name_match = 1 AND (address_match = 1 OR dob_match = 1), 1, 0)) > 0,
+      1, 0
+    ) AS record_match_q3
+  FROM per_ds_q3
+  GROUP BY Country, RecordID
+),
+
+base AS (
+  SELECT
+    r.Country,
+    r.RecordID,
+    COALESCE(q1.record_match_q1, 0) AS record_match_q1,
+    COALESCE(q3.record_match_q3, 0) AS record_match_q3
+  FROM `vibrant-sound-459613-a3.trulioo.Record_table` r
+  LEFT JOIN per_record_q1 q1
+    ON r.Country = q1.Country AND r.RecordID = q1.RecordID
+  LEFT JOIN per_record_q3 q3
+    ON r.Country = q3.Country AND r.RecordID = q3.RecordID
+)
+
+SELECT
+  Country,
+  COUNT(*) AS total_records,
+  SAFE_DIVIDE(SUM(record_match_q1), COUNT(*)) AS match_rate_q1,
+  SAFE_DIVIDE(SUM(record_match_q3), COUNT(*)) AS match_rate_q3,
+  SAFE_DIVIDE(SUM(record_match_q3), COUNT(*)) - SAFE_DIVIDE(SUM(record_match_q1), COUNT(*)) AS delta_q3_vs_q1
+FROM base
+GROUP BY Country
+ORDER BY Country;
