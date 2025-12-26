@@ -1,3 +1,10 @@
+-- Question 2
+-- Purpose: Recalculate match rate per country by changing the Name definition
+-- Change from Q1:
+--   Name match uses (FirstInitial AND LastName) instead of (FirstName AND LastName)
+-- Output:
+--   Country, total_records, match_rate_q2, delta_q2_vs_q1
+
 WITH field_flags AS (
   SELECT
     Country,
@@ -51,3 +58,4 @@ per_ds AS (
 SELECT *
 FROM per_ds
 LIMIT 20;
+
