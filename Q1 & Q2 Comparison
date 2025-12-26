@@ -1,0 +1,134 @@
+-- Q2 VS Q1: Match rater per Country + delta (Q2 -Q1 )
+--Q1 Name:   FirstName AND LastName  
+--Q2 Name:     FirstInitial AND LastName
+--Address + DOB logic unchanged.
+
+WITH field_flags AS (
+  SELECT
+    Country,
+    RecordID,
+    Datasource,
+    Field,
+    MatchStatusID,
+    CASE WHEN MatchStatusID = 2 THEN 1 ELSE 0 END AS is_match,
+    CASE WHEN MatchStatusID = 3 THEN 1 ELSE 0 END AS is_nomatch
+  FROM `vibrant-sound-459613-a3.trulioo.Field_table `
+),
+
+per_ds_q1 AS (
+  SELECT
+    Country, RecordID, Datasource,
+
+   --Name:(Q1)
+
+    CASE 
+      WHEN SUM(CASE WHEN Field = 'FirstName' AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND SUM(CASE WHEN Field = 'LastName'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
+      THEN 1 ELSE 0
+    END AS name_match,
+
+--DOB: (Same for Q1/Q2)
+    
+    CASE 
+      WHEN SUM(CASE WHEN Field = 'DayOfBirth'   AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND SUM(CASE WHEN Field = 'MonthOfBirth' AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND SUM(CASE WHEN Field = 'YearOfBirth'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
+      THEN 1 ELSE 0
+    END AS dob_match,
+
+    --Address( Same fpr Q1/Q2)
+    CASE 
+      WHEN SUM(CASE WHEN Field = 'StreetName'   AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND SUM(CASE WHEN Field = 'HouseNumber'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND (
+             SUM(CASE WHEN Field = 'PostalCode' AND is_match = 1 THEN 1 ELSE 0 END) > 0
+          OR SUM(CASE WHEN Field = 'City'       AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       )
+       AND SUM(CASE WHEN Field = 'UnitNumber' AND is_nomatch = 1 THEN 1 ELSE 0 END) = 0
+      THEN 1 ELSE 0
+    END AS address_match
+
+  FROM field_flags
+  GROUP BY Country, RecordID, Datasource
+),
+
+per_ds_q2 AS (
+  SELECT
+    Country, RecordID, Datasource,
+
+--Name (Q2)
+    
+    CASE 
+      WHEN SUM(CASE WHEN Field = 'FirstInitial' AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND SUM(CASE WHEN Field = 'LastName'     AND is_match = 1 THEN 1 ELSE 0 END) > 0
+      THEN 1 ELSE 0
+    END AS name_match,
+
+--DOB(Same)
+   
+    CASE 
+      WHEN SUM(CASE WHEN Field = 'DayOfBirth'   AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND SUM(CASE WHEN Field = 'MonthOfBirth' AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND SUM(CASE WHEN Field = 'YearOfBirth'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
+      THEN 1 ELSE 0
+    END AS dob_match,
+
+--Address(same)
+    
+    CASE 
+      WHEN SUM(CASE WHEN Field = 'StreetName'   AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND SUM(CASE WHEN Field = 'HouseNumber'  AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       AND (
+             SUM(CASE WHEN Field = 'PostalCode' AND is_match = 1 THEN 1 ELSE 0 END) > 0
+          OR SUM(CASE WHEN Field = 'City'       AND is_match = 1 THEN 1 ELSE 0 END) > 0
+       )
+       AND SUM(CASE WHEN Field = 'UnitNumber' AND is_nomatch = 1 THEN 1 ELSE 0 END) = 0
+      THEN 1 ELSE 0
+    END AS address_match
+
+  FROM field_flags
+  GROUP BY Country, RecordID, Datasource
+),
+
+per_record_q1 AS (
+  SELECT
+    Country,
+    RecordID,
+    CASE WHEN SUM(CASE WHEN name_match=1 AND (address_match=1 OR dob_match=1) THEN 1 ELSE 0 END) > 0
+         THEN 1 ELSE 0 END AS record_match_q1
+  FROM per_ds_q1
+  GROUP BY Country, RecordID
+),
+
+per_record_q2 AS (
+  SELECT
+    Country,
+    RecordID,
+    CASE WHEN SUM(CASE WHEN name_match=1 AND (address_match=1 OR dob_match=1) THEN 1 ELSE 0 END) > 0
+         THEN 1 ELSE 0 END AS record_match_q2
+  FROM per_ds_q2
+  GROUP BY Country, RecordID
+),
+
+base AS (
+  SELECT
+    r.Country,
+    r.RecordID,
+    COALESCE(q1.record_match_q1, 0) AS record_match_q1,
+    COALESCE(q2.record_match_q2, 0) AS record_match_q2
+  FROM `vibrant-sound-459613-a3.trulioo.Record_table` r
+  LEFT JOIN per_record_q1 q1
+    ON r.Country = q1.Country AND r.RecordID = q1.RecordID
+  LEFT JOIN per_record_q2 q2
+    ON r.Country = q2.Country AND r.RecordID = q2.RecordID
+)
+
+SELECT
+  Country,
+  COUNT(*) AS total_records,
+  SAFE_DIVIDE(SUM(record_match_q1), COUNT(*)) AS match_rate_q1,
+  SAFE_DIVIDE(SUM(record_match_q2), COUNT(*)) AS match_rate_q2,
+  SAFE_DIVIDE(SUM(record_match_q2), COUNT(*)) - SAFE_DIVIDE(SUM(record_match_q1), COUNT(*)) AS delta_q2_vs_q1
+FROM base
+GROUP BY Country
+ORDER BY Country;
